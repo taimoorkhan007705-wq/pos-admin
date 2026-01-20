@@ -34,13 +34,13 @@ function ProductsManager() {
   });
 
   // Authentication check
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!isAdminLoggedIn()) {
       navigate('/login');
       return;
     }
     loadProducts();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navigate]);
 
   // Return null if not authenticated

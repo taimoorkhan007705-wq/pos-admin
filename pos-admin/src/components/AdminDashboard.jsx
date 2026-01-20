@@ -40,6 +40,7 @@ function AdminDashboard() {
   const navigate = useNavigate();
   const network = useNetwork();
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!isAdminLoggedIn()) {
       navigate('/login');
@@ -68,7 +69,6 @@ function AdminDashboard() {
       window.removeEventListener('online', handleOnlineEvent);
       window.removeEventListener('offline', handleOfflineEvent);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navigate, network]);
 
   const loadData = async () => {

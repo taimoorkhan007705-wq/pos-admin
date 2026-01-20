@@ -121,9 +121,10 @@ export function NetworkProvider({ children }) {
   }, [isOnline, detecting]);
 
   // Initial server detection
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     detectServer();
-  }, [detectServer]);
+  }, []);
 
   // Listen for online/offline events
   useEffect(() => {
