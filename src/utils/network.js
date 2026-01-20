@@ -66,6 +66,17 @@ export async function isServerAvailable(url, timeout = 2000) {
 }
 
 /**
+ * Detect if we're running in production (Vercel)
+ */
+function isProduction() {
+  return (
+    window.location.hostname.includes('vercel.app') ||
+    window.location.hostname.includes('vercel.com') ||
+    process.env.NODE_ENV === 'production'
+  );
+}
+
+/**
  * Get the best available server URL for ADMIN
  * Priority: Cloud (Vercel) > Localhost (dev) > Local network
  */
@@ -83,8 +94,18 @@ export async function getServerUrl() {
 
   console.log('🔍 [Admin] Detecting best server...');
   console.log('📋 [Admin] Available servers:', SERVER_URLS);
+  console.log('🌍 [Admin] Production mode:', isProduction());
 
-  // ⚠️ PRIORITY: Try cloud server FIRST (for Vercel deployment)
+  // ⚠️ PRODUCTION MODE: Skip health checks, use cloud URL directly
+  if (isProduction() && SERVER_URLS.cloud !== SERVER_URLS.localhost) {
+    cachedMode = 'cloud';
+    lastCheck = now;
+    console.log('🌐 ✅ [Admin] PRODUCTION MODE - Using CLOUD server directly:', SERVER_URLS.cloud);
+    return { url: SERVER_URLS.cloud, mode: 'online' };
+  }
+
+  // DEVELOPMENT MODE: Try health checks
+  // ⚠️ PRIORITY: Try cloud server FIRST (if env var is set)
   if (navigator.onLine && SERVER_URLS.cloud !== SERVER_URLS.localhost) {
     if (await isServerAvailable(SERVER_URLS.cloud, 3000)) {
       cachedMode = 'cloud';
