@@ -8,8 +8,10 @@
 // ==========================================
 
 const SERVER_URLS = {
-  // Cloud server (agar backend cloud par deployed hai)
-  cloud: process.env.REACT_APP_CLOUD_SERVER || 'http://localhost:3001',
+  // Cloud server (Vercel deployment)
+  // For Vercel: Set REACT_APP_CLOUD_SERVER in Vercel dashboard > Settings > Environment Variables
+  // Default: Backend API at https://pos-backend-sooty.vercel.app
+  cloud: process.env.REACT_APP_CLOUD_SERVER || process.env.REACT_APP_BACKEND_URL || 'https://pos-backend-sooty.vercel.app',
 
   // Local server (admin laptop par backend chal raha hai)
   // Admin khud laptop par hai to localhost
@@ -65,7 +67,7 @@ export async function isServerAvailable(url, timeout = 2000) {
 
 /**
  * Get the best available server URL for ADMIN
- * Priority: Localhost (same machine) > Cloud > Local network
+ * Priority: Cloud (Vercel) > Localhost (dev) > Local network
  */
 export async function getServerUrl() {
   const now = Date.now();
@@ -82,7 +84,17 @@ export async function getServerUrl() {
   console.log('🔍 [Admin] Detecting best server...');
   console.log('📋 [Admin] Available servers:', SERVER_URLS);
 
-  // ⚠️ ADMIN PRIORITY: Try localhost FIRST (admin and backend on same machine)
+  // ⚠️ PRIORITY: Try cloud server FIRST (for Vercel deployment)
+  if (navigator.onLine && SERVER_URLS.cloud !== SERVER_URLS.localhost) {
+    if (await isServerAvailable(SERVER_URLS.cloud, 3000)) {
+      cachedMode = 'cloud';
+      lastCheck = now;
+      console.log('🌐 ✅ [Admin] Using CLOUD server:', SERVER_URLS.cloud);
+      return { url: SERVER_URLS.cloud, mode: 'online' };
+    }
+  }
+
+  // Try localhost (for local development)
   if (await isServerAvailable(SERVER_URLS.localhost, 2000)) {
     cachedMode = 'localhost';
     lastCheck = now;
@@ -100,21 +112,13 @@ export async function getServerUrl() {
     }
   }
 
-  // Try cloud server
-  if (navigator.onLine && SERVER_URLS.cloud !== SERVER_URLS.localhost) {
-    if (await isServerAvailable(SERVER_URLS.cloud, 3000)) {
-      cachedMode = 'cloud';
-      lastCheck = now;
-      console.log('🌐 [Admin] Using CLOUD server:', SERVER_URLS.cloud);
-      return { url: SERVER_URLS.cloud, mode: 'online' };
-    }
-  }
-
-  // If all fail, default to localhost
-  console.warn('⚠️ [Admin] All servers unavailable, defaulting to localhost');
-  cachedMode = 'localhost';
+  // If all fail, default to cloud (for Vercel) or localhost (for dev)
+  const defaultUrl = SERVER_URLS.cloud !== SERVER_URLS.localhost ? SERVER_URLS.cloud : SERVER_URLS.localhost;
+  const defaultMode = SERVER_URLS.cloud !== SERVER_URLS.localhost ? 'online' : 'localhost';
+  console.warn(`⚠️ [Admin] All servers unavailable, defaulting to: ${defaultUrl}`);
+  cachedMode = SERVER_URLS.cloud !== SERVER_URLS.localhost ? 'cloud' : 'localhost';
   lastCheck = now;
-  return { url: SERVER_URLS.localhost, mode: 'localhost' };
+  return { url: defaultUrl, mode: defaultMode };
 }
 
 /**
