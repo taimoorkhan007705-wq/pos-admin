@@ -1,89 +1,12 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import {
+  getServerUrl,
+  listenToNetworkChanges,
+  invalidateServerCache,
+  startHealthChecks
+} from '../utils/network';
 
 const NetworkContext = createContext(null);
-
-// Helper function to detect server URL
-async function detectServerUrl() {
-  // Priority order of URLs to check
-  const urlsToCheck = [
-    // Cloud/Production (if deployed)
-    import.meta.env.VITE_BACKEND_URL,
-    
-    // Local network (hotspot) - try common IPs
-    'http://192.168.137.1:3001',
-    'http://192.168.1.1:3001',
-    'http://192.168.0.1:3001',
-    
-    // Localhost variants
-    'http://localhost:3001',
-    'http://127.0.0.1:3001',
-    'http://localhost:5000',
-    'http://127.0.0.1:5000',
-  ].filter(Boolean); // Remove undefined values
-
-  console.log('🔍 Checking servers:', urlsToCheck);
-
-  for (const url of urlsToCheck) {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2000); // 2 second timeout
-
-      const response = await fetch(`${url}/health`, {
-        method: 'GET',
-        signal: controller.signal,
-        headers: { 'Content-Type': 'application/json' }
-      });
-
-      clearTimeout(timeoutId);
-
-      if (response.ok) {
-        const data = await response.json();
-        console.log('✅ Server found at:', url, data);
-        
-        // Determine mode based on URL
-        let mode = 'localhost';
-        if (url.includes('192.168') || url.includes('10.0')) {
-          mode = 'local'; // Hotspot/LAN
-        } else if (url.includes('cloud') || url.includes('herokuapp') || url.includes('vercel')) {
-          mode = 'online'; // Cloud
-        }
-
-        return { url, mode };
-      }
-    } catch (error) {
-      console.log(`❌ Server not found at ${url}:`, error.message);
-      continue;
-    }
-  }
-
-  // Fallback
-  console.warn('⚠️ No server found, using localhost as fallback');
-  return { 
-    url: 'http://localhost:3001', 
-    mode: 'disconnected' 
-  };
-}
-
-// Listen to network changes
-function listenToNetworkChanges(onOnline, onOffline) {
-  const handleOnline = () => {
-    console.log('🌐 Network: ONLINE');
-    onOnline?.();
-  };
-
-  const handleOffline = () => {
-    console.log('📵 Network: OFFLINE');
-    onOffline?.();
-  };
-
-  window.addEventListener('online', handleOnline);
-  window.addEventListener('offline', handleOffline);
-
-  return () => {
-    window.removeEventListener('online', handleOnline);
-    window.removeEventListener('offline', handleOffline);
-  };
-}
 
 /**
  * Network Provider - manages connectivity state and server selection
@@ -104,7 +27,7 @@ export function NetworkProvider({ children }) {
     setDetecting(true);
     try {
       console.log('🔍 Detecting server...');
-      const result = await detectServerUrl();
+      const result = await getServerUrl();
       
       setServerUrl(result.url);
       setMode(isOnline ? result.mode : 'disconnected');
@@ -130,6 +53,7 @@ export function NetworkProvider({ children }) {
     const cleanup = listenToNetworkChanges(
       () => {
         setIsOnline(true);
+        invalidateServerCache();
         detectServer();
       },
       () => {
@@ -152,6 +76,12 @@ export function NetworkProvider({ children }) {
 
     return () => clearInterval(timer);
   }, [detectServer, isOnline]);
+
+  // Periodic health checks (invalidate cache so API URL updates if backend changes)
+  useEffect(() => {
+    const cleanup = startHealthChecks(30000);
+    return cleanup;
+  }, []);
 
   // Auto-sync queued orders when we become online
   useEffect(() => {
